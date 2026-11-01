@@ -48,7 +48,7 @@ button{background:var(--ac);color:#fff;border:0;font-weight:600}
 <script>
 const API="https://sedeaplicaciones.minetur.gob.es/ServiciosRESTCarburantes/PreciosCarburantes/EstacionesTerrestres/";
 const map=L.map("map").setView([40.4,-3.7],6);
-L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"© OpenStreetMap"}).addTo(map);
+L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}",{maxZoom:19,attribution:"Tiles © Esri"}).addTo(map);
 let layer=L.layerGroup().addTo(map),data=null,me=null;
 const num=s=>parseFloat(String(s||"").replace(",","."));
 const $=id=>document.getElementById(id);
@@ -70,3 +70,63 @@ async function load(){
       const j=await res.json();
       data=j.ListaEESSPrecio;
       $("st").textContent="Datos del Ministerio: "+j.Fecha;
+      return;
+    }catch(e){ultimo=e;}
+  }
+  throw ultimo;
+}
+async function search(){
+  if(!me){
+    try{
+      const p=await new Promise((ok,ko)=>{
+        if(!navigator.geolocation)return ko({message:"sin soporte"});
+        navigator.geolocation.getCurrentPosition(ok,ko,{enableHighAccuracy:false,timeout:10000});
+      });
+      me=[p.coords.latitude,p.coords.longitude];
+    }catch(e){
+      $("st").textContent="No he podido obtener tu ubicación ("+(e.message||"permiso denegado")+"). Toca en el mapa el sitio donde estás.";
+      return;
+    }
+  }
+  try{
+    if(!data)await load();
+    draw();
+  }catch(e){
+    $("st").textContent="No se pudieron descargar los precios del Ministerio ("+(e.message||e)+").";
+  }
+}
+map.on("click",e=>{me=[e.latlng.lat,e.latlng.lng];search()});
+function draw(){
+  const f=$("fuel").value,rad=+$("rad").value,pv=prev(),old=pv[f]||{};
+  const res=data.map(s=>({s,p:num(s[f]),lat:num(s["Latitud"]),lon:num(s["Longitud (WGS84)"])}))
+   .filter(o=>o.p>0&&!isNaN(o.lat))
+   .map(o=>({...o,d:km(me[0],me[1],o.lat,o.lon)}))
+   .filter(o=>o.d<=rad).sort((a,b)=>a.p-b.p);
+  layer.clearLayers();$("list").innerHTML="";
+  L.circleMarker(me,{radius:8,color:"#2563eb",fillOpacity:.9}).addTo(layer).bindPopup("Tú");
+  const bounds=[me];
+  res.forEach((o,i)=>{
+    const id=o.s["IDEESS"],was=old[id];
+    let tr="";
+    if(was){const dif=o.p-was;if(Math.abs(dif)>.0004)tr=dif>0?`<span class="up">▲ ${dif.toFixed(3)}</span>`:`<span class="down">▼ ${Math.abs(dif).toFixed(3)}</span>`}
+    const col=i==0?"#0a7d3b":i<3?"#e8a100":"#888";
+    const m=L.circleMarker([o.lat,o.lon],{radius:i==0?11:7,color:col,fillColor:col,fillOpacity:.85}).addTo(layer);
+    m.bindPopup(`<b>${o.s["Rótulo"]}</b><br>${o.p.toFixed(3)} €/L<br>${o.s["Dirección"]}<br>${o.s["Horario"]}`);
+    bounds.push([o.lat,o.lon]);
+    const el=document.createElement("div");el.className="it";
+    el.innerHTML=`<div><b>${o.p.toFixed(3)} €</b> ${tr}<br>${o.s["Rótulo"]}<br><small>${o.s["Dirección"]}, ${o.s["Localidad"]} · ${o.d.toFixed(1)} km</small></div>
+     <a href="https://www.google.com/maps/dir/?api=1&destination=${o.lat},${o.lon}" target="_blank" onclick="event.stopPropagation()">Ir</a>`;
+    el.onclick=()=>{map.setView([o.lat,o.lon],15);m.openPopup()};
+    $("list").appendChild(el);
+  });
+  if(!res.length)$("list").textContent="No hay gasolineras en ese radio.";
+  map.fitBounds(bounds,{padding:[30,30]});
+  const nw={};data.forEach(s=>{const p=num(s[f]);if(p>0)nw[s["IDEESS"]]=p});
+  pv[f]=nw;try{localStorage.setItem("prev",JSON.stringify(pv))}catch(e){}
+}
+$("go").onclick=search;
+$("fuel").onchange=()=>data&&me&&draw();
+$("rad").onchange=()=>data&&me&&draw();
+</script>
+</body>
+</html>
