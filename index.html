@@ -109,7 +109,7 @@ function draw(){
     const id=o.s["IDEESS"],was=old[id];
     let tr="";
     if(was){const dif=o.p-was;if(Math.abs(dif)>.0004)tr=dif>0?`<span class="up">▲ ${dif.toFixed(3)}</span>`:`<span class="down">▼ ${Math.abs(dif).toFixed(3)}</span>`}
-    const col=i==0?"#0a7d3b":i<3?"#e8a100":"#888";
+    const col=i==0?"#0a7d3b":i<3?"#e8a100":o.p>=1.8?"#d62828":"#888";
     const m=L.circleMarker([o.lat,o.lon],{radius:i==0?11:7,color:col,fillColor:col,fillOpacity:.85}).addTo(layer);
     m.bindPopup(`<b>${o.s["Rótulo"]}</b><br>${o.p.toFixed(3)} €/L<br>${o.s["Dirección"]}<br>${o.s["Horario"]}`);
     bounds.push([o.lat,o.lon]);
